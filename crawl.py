@@ -165,8 +165,7 @@ class CrawlJobs:
                         self.get_into_link(job)
                         result = self.get_details_job()
                         self.write_csv(f'data/{key_search}-job.csv', result)
-                        sleep(random.randint(1, 4))
-                        break
+                        sleep(random.randint(1, 3))
                     i += 1
                     self.backto_previous_page(prev)
                     prev = self.next_page(i)
