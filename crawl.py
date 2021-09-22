@@ -1,6 +1,8 @@
 import os
 import sys
 import csv
+import random
+import traceback
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -15,6 +17,11 @@ class CrawlJobs:
         self.keys = keys
         self.init_driver()
         self.get_into_link(self.HOME)
+
+    def get_proxy(self):
+        proxies = ['171.244.10.43:2000']
+        # return proxies[random.randint(0, len(proxies) - 1)]
+        return proxies[0]
 
     def options_driver(self):
         CHROMEDRIVER_PATH = './chromedriver'
@@ -57,7 +64,8 @@ class CrawlJobs:
         chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         chrome_options.add_argument("user-agent=foo")
         # proxy
-        PROXY = '171.244.10.43:2000'  # IP:PORT or HOST:PORT
+        PROXY = self.get_proxy()
+        print(f'----------- Run project with: {PROXY}')
         chrome_options.add_argument(f'--proxy-server={PROXY}')
         driver = webdriver.Chrome(
             executable_path=CHROMEDRIVER_PATH, options=chrome_options)
@@ -65,6 +73,11 @@ class CrawlJobs:
 
     def init_driver(self):
         self.browser = self.options_driver()
+
+    def write_csv(self, filename, content):
+        with open(filename, 'a') as csvfile:
+            csvobj = csv.writer(csvfile)
+            csvobj.writerow(content)
 
     def get_into_link(self, link):
         self.browser.get(link)
@@ -74,6 +87,47 @@ class CrawlJobs:
             'ui-autocomplete-input')
         input.send_keys(key)
         input.send_keys(Keys.ENTER)
+        sleep(1)
+
+    def get_info_job(self):
+        title = self.browser.find_element_by_class_name(
+            'job-details__title').text
+        try:
+            reason = self.browser.find_element_by_class_name(
+                'job-details__top-reason-to-join-us')
+        except:
+            reason = False
+        tmp_title = self.browser.find_elements_by_class_name(
+            'job-details__second-title')
+        tmp = [reason] if reason else []
+        paras = self.browser.find_elements_by_class_name(
+            'job-details__paragraph')
+        for p in paras:
+            tmp.append(p)
+        des = [" ".join((str1.text, str2.text))
+               for (str1, str2) in zip(tmp_title, tmp)]
+        return [title, des]
+
+    def get_info_company(self):
+        overview = self.browser.find_element_by_class_name(
+            'job-details__overview').find_elements_by_class_name('svg-icon')
+        address = overview[1].text
+        date = overview[2].text
+        com_name = self.browser.find_element_by_class_name(
+            'employer-long-overview__name').text
+        des = self.browser.find_element_by_class_name(
+            'employer-long-overview__short-desc').text
+        com_des = self.browser.find_element_by_class_name(
+            'employer-long-overview__basic-info').text
+        country = self.browser.find_element_by_class_name('svg-icon').text
+        return [address, com_name, des, com_des, country, date]
+
+    def get_details_job(self):
+        return [*self.get_info_job(), *self.get_info_company()]
+
+    def backto_previous_page(self, link):
+        self.get_into_link(link)
+        sleep(1)
 
     def refresh_home(self):
         self.get_into_link(self.HOME)
@@ -84,27 +138,41 @@ class CrawlJobs:
         return [a.get_attribute('href') for a in a_tags]
 
     def next_page(self, i):
-        link = f"//a[contains(@href, 'page={i}&source=search_job')]"
+        link = f"//a[contains(@href, 'page={i}')]"
         button = self.browser.find_element_by_xpath(link)
+        href = button.get_attribute('href')
         self.browser.execute_script("arguments[0].click();", button)
+        return href
 
     def crawl(self):
         n = len(self.keys)
         for i in range(1, n):
-            self.search_keyword(self.keys[i])
-            job_links = self.get_job_links()
-            print(len(job_links))
+            key_search = self.keys[i]
+            print(f'##########################################################')
+            print(f'----------- Processing job name: {key_search}')
+            self.search_keyword(key_search)
+            prev = f'https://itviec.com/it-jobs/{key_search}'
             try:
-                i = 2
+                i = 1
                 while True:
-                    self.next_page(i)
+                    job_links = self.get_job_links()
+                    print(f'----------------------------------------------------------')
+                    print(f'----------- Processing page: {i}')
+                    print(
+                        f'----------- Number of jobs per page: {len(job_links)}')
+                    for job_i, job in enumerate(job_links):
+                        print(f'----------- Processing job: {job_i + 1}')
+                        self.get_into_link(job)
+                        result = self.get_details_job()
+                        self.write_csv(f'data/{key_search}-job.csv', result)
+                        sleep(random.randint(1, 4))
+                        break
                     i += 1
-                    sleep(2)
+                    self.backto_previous_page(prev)
+                    prev = self.next_page(i)
             except Exception as e:
                 pass
-            break
             self.refresh_home()
-        sleep(10)
         self.browser.close()
 
 
