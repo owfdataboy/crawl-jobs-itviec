@@ -1,6 +1,6 @@
 # Crawling Jobs itviec
 
-## The project is crawling data of specified jobs in itviec website
+## The project is crawling data of specified jobs n itviec website
 Official website: https://itviec.com/
 
 ## Guide to run the project
